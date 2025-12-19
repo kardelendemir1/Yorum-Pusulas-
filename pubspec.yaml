@@ -1,0 +1,36 @@
+name: yorum_pusulas
+description: "tarafsiz bir yorum uygulamasi"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # --- FIREBASE (Temel) ---
+  firebase_core: ^3.0.0
+  cloud_firestore: ^5.0.0
+  firebase_auth: ^5.0.0
+  firebase_storage: ^12.0.0
+
+  # --- GÖRSEL VE YAPAY ZEKA ---
+  image_picker: ^1.1.0
+  google_mlkit_image_labeling: ^0.13.0
+  google_generative_ai: ^0.4.3  # <--- GEMINI (Bunu arıyordu)
+  translator: ^1.0.0
+
+  # --- ARAÇLAR ---
+  url_launcher: ^6.2.5           # <--- LINK AÇMA (Bunu da arıyordu)
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

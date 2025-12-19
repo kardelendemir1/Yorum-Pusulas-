@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1057768975051",
+    "project_id": "yorumpusulas",
+    "storage_bucket": "yorumpusulas.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1057768975051:android:3b7b053faeb90abbfec94e",
+        "android_client_info": {
+          "package_name": "com.yorum_pusulas.yorum_pusulas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC02f7KIn0d2uLRncZJDraQK7WGG226lFo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
