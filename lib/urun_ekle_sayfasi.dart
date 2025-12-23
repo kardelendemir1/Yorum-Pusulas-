@@ -9,6 +9,10 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:yorum_pusulas/app_colors.dart';
 import 'package:yorum_pusulas/urun_detay_sayfasi.dart';
 
+// --- YAPAY ZEKA VE ÇEVİRİ PAKETLERİ ---
+import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
+import 'package:translator/translator.dart';
+
 class UrunEkleSayfasi extends StatefulWidget {
   final String? gelenUrunAdi;
   final String? gelenResimLinki;
@@ -20,8 +24,8 @@ class UrunEkleSayfasi extends StatefulWidget {
 }
 
 class _UrunEkleSayfasiState extends State<UrunEkleSayfasi> {
-  // --- API KEY ---
-  final String _geminiApiKey = "AIzaSyA6MMBjLPhEGPHd469huG5BH3FaFxq-D7g";
+  // --- API KEY (Tırnak içinde olmalı) ---
+  final String _geminiApiKey = "AIzaSyClYjegxpMQwnoQMYaoAUDOjaZsDIgJ5GU";
 
   File? _secilenResimDosyasi;
   String? _webResimLinki;
@@ -57,131 +61,96 @@ class _UrunEkleSayfasiState extends State<UrunEkleSayfasi> {
     }
   }
 
-  void _mesajGoster(String mesaj, {bool hata = false}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(mesaj),
-        backgroundColor: hata ? Colors.red : AppColors.turkuaz,
-        behavior: SnackBarBehavior.floating
-    ));
-  }
-
-  // --- GEMINI VERSİYONLARI GETİR ---
-  Future<void> _geminiVersiyonlariGetir() async {
-    if (_ipucuController.text.trim().isEmpty) {
-      _mesajGoster("Lütfen ürünün adını yazın.", hata: true);
-      return;
-    }
-
+  // --- 1. ADIM: GÖRSELİ ML KIT İLE TANI ---
+  Future<void> _resmiOtomatikAnalizEt(File resim) async {
     setState(() => _analizEdiliyor = true);
-
     try {
-      // ---------------------------------------------------------
-      // 🛠️ MODEL ADI GÜNCELLENDİ: SİZİN LİSTENİZDEN ALINDI
-      // ---------------------------------------------------------
-      final model = GenerativeModel(
-          model: 'gemini-2.5-flash', // Listenizdeki en stabil ve güçlü model
-          apiKey: _geminiApiKey
-      );
+      final inputImage = InputImage.fromFile(resim);
+      final labeler = ImageLabeler(options: ImageLabelerOptions(confidenceThreshold: 0.7));
+      final List<ImageLabel> labels = await labeler.processImage(inputImage);
+      labeler.close();
 
-      String promptMetni = """
-        Sen bir ürün kataloğu asistanısın.
-        Görev: Kullanıcının girdiği isme (ve varsa fotoğrafa) bakarak, bu ürünün piyasadaki olası Tam Ticari Modellerini listele.
-        
-        Kullanıcı Girdisi: '${_ipucuController.text}'
-        
-        Kurallar:
-        1. Asla genel isim verme (Örn: 'Telefon' deme -> 'iPhone 13 128GB' de).
-        2. Çıktı SADECE aşağıdaki formatta saf bir JSON Array olmalı. Markdown (```json) kullanma.
-        
-        İstenen JSON Formatı:
-        [
-          {"name": "Tam Marka Model Adı", "category": "Kategori", "desc": "Kısa açıklama"}
-        ]
-      """;
+      if (labels.isNotEmpty) {
+        String etiket = labels.first.label; // Örn: "Dalin"
 
-      GenerateContentResponse response;
+        // İngilizce sonucu Türkçeye çevir
+        final translator = GoogleTranslator();
+        var ceviri = await translator.translate(etiket, to: 'tr');
 
-      if (_secilenResimDosyasi != null) {
-        final imageBytes = await _secilenResimDosyasi!.readAsBytes();
-        final prompt = Content.multi([
-          TextPart(promptMetni),
-          DataPart('image/jpeg', imageBytes),
-        ]);
-        response = await model.generateContent([prompt]);
-      } else {
-        final prompt = Content.text(promptMetni);
-        response = await model.generateContent([prompt]);
-      }
+        setState(() {
+          _ipucuController.text = ceviri.text;
+        });
 
-      String? temizJson = response.text?.replaceAll('```json', '').replaceAll('```', '').trim();
-
-      if (temizJson != null) {
-        try {
-          List<dynamic> secenekler = jsonDecode(temizJson);
-          if (mounted) _versiyonSecimPenceresi(secenekler);
-        } catch (e) {
-          _mesajGoster("Yapay zeka cevabı anlaşılamadı. Tekrar deneyin.", hata: true);
-        }
+        // --- 2. ADIM: GEMINI 2.5 FLASH SORGUSUNU BAŞLAT ---
+        await _geminiVersiyonlariGetir();
       }
     } catch (e) {
-      print("Hata Detayı: $e");
-      String hataMesaji = "Bir hata oluştu.";
-
-      if (e.toString().contains("404") || e.toString().contains("not found")) {
-        hataMesaji = "Model bulunamadı (Bölge kısıtlaması olabilir).";
-      } else if (e.toString().contains("API_KEY")) {
-        hataMesaji = "API Anahtarı geçersiz.";
-      }
-
-      _mesajGoster("$hataMesaji ($e)", hata: true);
+      debugPrint("Görsel Analiz Hatası: $e");
     } finally {
       if (mounted) setState(() => _analizEdiliyor = false);
     }
   }
 
-  // --- Buradan aşağısı aynı ---
+  // --- GEMINI 2.5 FLASH İLE MODEL BELİRLEME ---
+  Future<void> _geminiVersiyonlariGetir() async {
+    if (_ipucuController.text.trim().isEmpty) return;
+
+    setState(() => _analizEdiliyor = true);
+
+    try {
+      final model = GenerativeModel(
+          model: 'gemini-2.5-flash', // Senin kodundaki model ismi korundu
+          apiKey: _geminiApiKey
+      );
+
+      String promptMetni = """
+        Sen bir ürün kataloğu asistanısın.
+        Görev: '${_ipucuController.text}' ürününe bakarak tam ticari modelleri listele.
+        Asla genel isim verme (Örn: 'Şampuan' deme -> 'Dalin Bebek Şampuanı 500ml' de).
+        Format: SADECE saf JSON Array olmalı. Markdown kullanma.
+        [{"name": "Tam Marka Model Adı", "category": "Kategori", "desc": "Kısa açıklama"}]
+      """;
+
+      final response = await model.generateContent([Content.text(promptMetni)]);
+      String? temizJson = response.text?.replaceAll('```json', '').replaceAll('```', '').trim();
+
+      if (temizJson != null) {
+        List<dynamic> secenekler = jsonDecode(temizJson);
+        if (mounted) _versiyonSecimPenceresi(secenekler);
+      }
+    } catch (e) {
+      _mesajGoster("Yapay Zeka Hatası: API Anahtarını kontrol edin");
+    } finally {
+      if (mounted) setState(() => _analizEdiliyor = false);
+    }
+  }
+
+  // --- SEÇİM PENCERESİ VE FORM DOLDURMA ---
   void _versiyonSecimPenceresi(List<dynamic> secenekler) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) {
-        return Container(
-          padding: const EdgeInsets.all(20),
-          height: MediaQuery.of(context).size.height * 0.6,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text("Modeli Seçin", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: AppColors.griYazi)),
-              const SizedBox(height: 10),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: secenekler.length,
-                  itemBuilder: (context, index) {
-                    var item = secenekler[index];
-                    return Card(
-                      elevation: 0,
-                      color: AppColors.turkuaz.withOpacity(0.05),
-                      margin: const EdgeInsets.only(bottom: 10),
-                      child: ListTile(
-                        leading: const Icon(Icons.check_circle_outline, color: AppColors.turkuaz),
-                        title: Text(item['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text(item['desc'] ?? ""),
-                        onTap: () {
-                          _formuDoldur(item['name'], item['category'], item['desc']);
-                          Navigator.pop(ctx);
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        height: MediaQuery.of(context).size.height * 0.6,
+        child: Column(children: [
+          const Text("Ürünü Seçin", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          const SizedBox(height: 10),
+          Expanded(child: ListView.builder(
+            itemCount: secenekler.length,
+            itemBuilder: (c, i) => ListTile(
+              leading: const Icon(Icons.check_circle_outline, color: Colors.teal),
+              title: Text(secenekler[i]['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(secenekler[i]['desc'] ?? ""),
+              onTap: () {
+                _formuDoldur(secenekler[i]['name'], secenekler[i]['category'], secenekler[i]['desc']);
+                Navigator.pop(ctx);
+              },
+            ),
+          ))
+        ]),
+      ),
     );
   }
 
@@ -197,69 +166,33 @@ class _UrunEkleSayfasiState extends State<UrunEkleSayfasi> {
         }
       }
     });
-    _mesajGoster("Model seçildi! Şimdi puan verip kaydedin.");
   }
 
-  void _kaynakSecimiGoster() {
-    showModalBottomSheet(
-      context: context, backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => SafeArea(child: Wrap(children: [
-        ListTile(leading: const Icon(Icons.camera_alt, color: AppColors.turkuaz), title: const Text('Fotoğraf Çek'), onTap: () { Navigator.pop(context); _resimSec(ImageSource.camera); }),
-        ListTile(leading: const Icon(Icons.photo_library, color: Colors.orangeAccent), title: const Text('Galeriden Seç'), onTap: () { Navigator.pop(context); _resimSec(ImageSource.gallery); }),
-      ])),
-    );
-  }
-
+  // --- GÖRSEL SEÇİMİ (SEÇİLDİĞİ ANDA ANALİZİ TETİKLER) ---
   Future<void> _resimSec(ImageSource kaynak) async {
     final XFile? resim = await _picker.pickImage(source: kaynak, imageQuality: 80);
     if (resim != null) {
+      File resimDosyasi = File(resim.path);
       setState(() {
-        _secilenResimDosyasi = File(resim.path);
+        _secilenResimDosyasi = resimDosyasi;
         _webResimLinki = null;
         _urunSecildi = false;
         _urunAdiController.clear();
       });
+      // Fotoğraf seçildiğinde süreci otomatik başlatır
+      await _resmiOtomatikAnalizEt(resimDosyasi);
     }
   }
 
+  // --- KAYIT VE MESAJ FONKSİYONLARI ---
   Future<void> _kaydetButonunaBasildi() async {
-    if (!_urunSecildi || _urunAdiController.text.isEmpty) {
-      _mesajGoster("Lütfen önce bir isim yazıp 'Yapay Zeka ile Modeli Seç' deyin.", hata: true);
+    if (!_urunSecildi) {
+      _mesajGoster("Lütfen bir ürün modeli seçin.", hata: true);
       return;
     }
     setState(() => _yukleniyor = true);
-
     try {
-      QuerySnapshot tamEslesme = await _firestore.collection('urunler').where('urunAdi', isEqualTo: _urunAdiController.text).get();
-      if (tamEslesme.docs.isNotEmpty) {
-        var mevcut = tamEslesme.docs.first;
-        if (mounted) {
-          showDialog(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text("Bu Ürün Zaten Var!"),
-              content: const Text("Bu ürün kataloğumuzda kayıtlı. Oraya gitmek ister misin?"),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("İptal")),
-                ElevatedButton(onPressed: () { Navigator.pop(ctx); Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => UrunDetaySayfasi(urunId: mevcut.id))); }, child: const Text("Git")),
-              ],
-            ),
-          );
-        }
-        setState(() => _yukleniyor = false);
-        return;
-      }
-    } catch (e) { print(e); }
-
-    await _urunEkle();
-  }
-
-  Future<void> _urunEkle() async {
-    if (_verilenPuan == 0) { _mesajGoster("Lütfen ürüne puan verin.", hata: true); setState(() => _yukleniyor = false); return; }
-
-    String finalResimLinki = "";
-    try {
+      String finalResimLinki = "";
       if (_secilenResimDosyasi != null) {
         String dosyaAdi = '${DateTime.now().millisecondsSinceEpoch}.jpg';
         Reference ref = _storage.ref().child('urun_resimleri').child(dosyaAdi);
@@ -269,38 +202,32 @@ class _UrunEkleSayfasiState extends State<UrunEkleSayfasi> {
         finalResimLinki = _webResimLinki!;
       }
 
-      List<String> kelimeler = _urunAdiController.text.toLowerCase().split(' ');
-      List<String> anahtarlar = [];
-      for(var k in kelimeler) if(k.length>1) anahtarlar.add(k);
-
-      Map<String, dynamic> urunVerisi = {
+      await _firestore.collection('urunler').add({
         'urunAdi': _urunAdiController.text.trim(),
-        'aramaAnahtarlari': anahtarlar,
         'aciklama': _aciklamaController.text.trim(),
         'kategori': _secilenKategori ?? 'Diğer',
         'resimLinki': finalResimLinki,
         'ekleyenKullaniciID': _auth.currentUser!.uid,
         'eklenmeTarihi': FieldValue.serverTimestamp(),
-        'ilkPuan': _verilenPuan,
         'ortalamaPuan': _verilenPuan.toDouble(),
         'toplamOySayisi': 1,
-      };
-
-      DocumentReference docRef = await _firestore.collection('urunler').add(urunVerisi);
-
-      if (_aciklamaController.text.isNotEmpty) {
-        await _firestore.collection('urunler').doc(docRef.id).collection('yorumlar').add({
-          'yorum': _aciklamaController.text.trim(), 'puan': _verilenPuan, 'kullaniciId': _auth.currentUser!.uid, 'kullaniciEmail': _auth.currentUser!.email, 'tarih': FieldValue.serverTimestamp(),
-        });
-        await _firestore.collection('reviews').add({
-          'userId': _auth.currentUser!.uid, 'productId': docRef.id, 'productName': _urunAdiController.text.trim(), 'imageUrl': finalResimLinki, 'reviewText': _aciklamaController.text.trim(), 'rating': _verilenPuan, 'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
+      });
 
       _mesajGoster("Ürün başarıyla eklendi!");
-      if(mounted) Navigator.pop(context);
-    } catch (e) { _mesajGoster("Hata: $e", hata: true); }
-    finally { if(mounted) setState(() { _yukleniyor = false; }); }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      _mesajGoster("Hata: $e", hata: true);
+    } finally {
+      if (mounted) setState(() => _yukleniyor = false);
+    }
+  }
+
+  void _mesajGoster(String mesaj, {bool hata = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(mesaj),
+        backgroundColor: hata ? Colors.red : Colors.teal,
+        behavior: SnackBarBehavior.floating
+    ));
   }
 
   @override
@@ -310,38 +237,37 @@ class _UrunEkleSayfasiState extends State<UrunEkleSayfasi> {
     else if (_webResimLinki != null) arkaPlanResmi = NetworkImage(_webResimLinki!);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(title: const Text('Yeni Ürün Ekle'), centerTitle: true),
+      appBar: AppBar(title: const Text('Yeni Ürün Ekle')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            GestureDetector(
-              onTap: _kaynakSecimiGoster,
-              child: Container(
-                height: 150, width: double.infinity,
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade300), image: arkaPlanResmi != null ? DecorationImage(image: arkaPlanResmi, fit: BoxFit.contain) : null),
-                child: arkaPlanResmi == null ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.add_a_photo, size: 40, color: AppColors.turkuaz), Text("Fotoğraf Yükle (İsteğe Bağlı)")])) : null,
-              ),
+        child: Column(children: [
+          GestureDetector(
+            onTap: () {
+              showModalBottomSheet(context: context, builder: (ctx) => SafeArea(child: Wrap(children: [
+                ListTile(leading: const Icon(Icons.camera_alt), title: const Text('Fotoğraf Çek ve Tanı'), onTap: () { Navigator.pop(ctx); _resimSec(ImageSource.camera); }),
+                ListTile(leading: const Icon(Icons.photo_library), title: const Text('Galeriden Seç'), onTap: () { Navigator.pop(ctx); _resimSec(ImageSource.gallery); }),
+              ])));
+            },
+            child: Container(
+              height: 150, width: double.infinity,
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade300), image: arkaPlanResmi != null ? DecorationImage(image: arkaPlanResmi, fit: BoxFit.contain) : null),
+              child: arkaPlanResmi == null ? const Center(child: Column(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.camera_enhance, size: 40, color: Colors.teal), Text("FOTOĞRAFLA OTOMATİK TANI")])) : null,
             ),
-            const SizedBox(height: 20),
-            TextField(controller: _ipucuController, decoration: const InputDecoration(labelText: '1. Adım: Ürün Nedir? (Zorunlu)', hintText: 'Örn: Tenis Raketi', border: OutlineInputBorder(), filled: true, fillColor: Colors.white)),
-            const SizedBox(height: 10),
-            SizedBox(width: double.infinity, height: 50, child: ElevatedButton.icon(onPressed: _analizEdiliyor ? null : _geminiVersiyonlariGetir, icon: _analizEdiliyor ? const CircularProgressIndicator() : const Icon(Icons.auto_awesome), label: Text(_analizEdiliyor ? "Aranıyor..." : "2. Adım: Yapay Zeka ile Modeli Seç"))),
-            const SizedBox(height: 20),
-            const Divider(),
-            const SizedBox(height: 10),
-            TextField(controller: _urunAdiController, readOnly: true, decoration: const InputDecoration(labelText: 'Seçilen Model (Otomatik)', filled: true, fillColor: Colors.grey, border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock))),
-            const SizedBox(height: 15),
-            DropdownButtonFormField(value: _secilenKategori, items: _kategoriler.map((k) => DropdownMenuItem(value: k, child: Text(k))).toList(), onChanged: (v) => setState(() => _secilenKategori = v), decoration: const InputDecoration(labelText: 'Kategori', border: OutlineInputBorder())),
-            const SizedBox(height: 20),
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(5, (i) => IconButton(icon: Icon(i < _verilenPuan ? Icons.star : Icons.star_border, color: Colors.amber, size: 40), onPressed: () => setState(() => _verilenPuan = i + 1)))),
-            const SizedBox(height: 20),
-            TextField(controller: _aciklamaController, maxLines: 3, decoration: const InputDecoration(labelText: 'Yorumun', border: OutlineInputBorder())),
-            const SizedBox(height: 30),
-            SizedBox(width: double.infinity, height: 55, child: ElevatedButton(onPressed: (_yukleniyor || !_urunSecildi) ? null : _kaydetButonunaBasildi, style: ElevatedButton.styleFrom(backgroundColor: AppColors.turkuaz, foregroundColor: Colors.white), child: _yukleniyor ? const CircularProgressIndicator(color: Colors.white) : const Text("KAYDET"))),
-          ],
-        ),
+          ),
+          const SizedBox(height: 20),
+          TextField(controller: _ipucuController, decoration: const InputDecoration(labelText: 'Ürün Adı (Otomatik Dolar)', border: OutlineInputBorder())),
+          if (_analizEdiliyor) const Padding(padding: EdgeInsets.only(top: 10), child: LinearProgressIndicator()),
+          const Divider(height: 40),
+          TextField(controller: _urunAdiController, readOnly: true, decoration: const InputDecoration(labelText: 'Onaylanan Model', filled: true, border: OutlineInputBorder(), prefixIcon: Icon(Icons.verified, color: Colors.blue))),
+          const SizedBox(height: 15),
+          DropdownButtonFormField(value: _secilenKategori, items: _kategoriler.map((k) => DropdownMenuItem(value: k, child: Text(k))).toList(), onChanged: (v) => setState(() => _secilenKategori = v), decoration: const InputDecoration(labelText: 'Kategori', border: OutlineInputBorder())),
+          const SizedBox(height: 20),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(5, (i) => IconButton(icon: Icon(i < _verilenPuan ? Icons.star : Icons.star_border, color: Colors.amber, size: 40), onPressed: () => setState(() => _verilenPuan = i + 1)))),
+          const SizedBox(height: 20),
+          TextField(controller: _aciklamaController, maxLines: 3, decoration: const InputDecoration(labelText: 'Yorumun', border: OutlineInputBorder())),
+          const SizedBox(height: 30),
+          SizedBox(width: double.infinity, height: 55, child: ElevatedButton(onPressed: (_yukleniyor || !_urunSecildi) ? null : _kaydetButonunaBasildi, style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white), child: _yukleniyor ? const CircularProgressIndicator(color: Colors.white) : const Text("KAYDET"))),
+        ]),
       ),
     );
   }

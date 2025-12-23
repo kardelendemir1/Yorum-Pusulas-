@@ -97,120 +97,133 @@ class _GirisSayfasiState extends State<GirisSayfasi> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.arkaPlan, // Genel arka plan rengi
-      appBar: AppBar(
-        title: const Text(
-          'Giriş Yap',
-          style: TextStyle(fontWeight: FontWeight.bold),
+      // AppBar'ı kaldırdık çünkü gradyanın tüm ekranı kaplaması daha şık durur
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          // Profil sayfanızdaki renk geçişi
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF38A3A5), // Turkuaz
+              Color(0xFFE29587), // Pembe/Şeftali
+            ],
+          ),
         ),
-        backgroundColor: AppColors.turkuaz,
-        foregroundColor: AppColors.beyaz,
-        elevation: 0,
-      ),
-
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // --- E-POSTA METİN KUTUSU ---
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                labelText: 'E-posta',
-                filled: true,
-                fillColor: AppColors.beyaz,
-                prefixIcon: Icon(Icons.email, color: AppColors.turkuazKoyu),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10.0),
-                  borderSide: BorderSide(
-                    color: AppColors.turkuaz,
-                    width: 2.0,
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10.0),
-                  borderSide: BorderSide(
-                    color: Colors.grey[300]!,
-                  ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 100),
+              // --- LOGO / İKON ---
+              const Icon(Icons.explore_outlined, size: 100, color: Colors.white),
+              const SizedBox(height: 15),
+              const Text(
+                "Yorum Pusulası",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
                 ),
               ),
-            ),
+              const SizedBox(height: 50),
 
-            const SizedBox(height: 16),
-
-            // --- ŞİFRE METİN KUTUSU ---
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: 'Şifre',
-                filled: true,
-                fillColor: AppColors.beyaz,
-                prefixIcon: Icon(Icons.lock, color: AppColors.turkuazKoyu),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10.0),
-                  borderSide: BorderSide(
-                    color: AppColors.turkuaz,
-                    width: 2.0,
-                  ),
+              // --- FORM ALANI (Hafif Şeffaf Beyaz Kart) ---
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9), // Gradyanı öldürmeyen hafif şeffaflık
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 15,
+                      offset: const Offset(0, 8),
+                    )
+                  ],
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10.0),
-                  borderSide: BorderSide(
-                    color: Colors.grey[300]!,
-                  ),
+                child: Column(
+                  children: [
+                    // --- E-POSTA METİN KUTUSU ---
+                    TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(
+                        labelText: 'E-posta',
+                        prefixIcon: const Icon(Icons.email, color: Color(0xFF38A3A5)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // --- ŞİFRE METİN KUTUSU ---
+                    TextField(
+                      controller: _passwordController,
+                      obscureText: true,
+                      decoration: InputDecoration(
+                        labelText: 'Şifre',
+                        prefixIcon: const Icon(Icons.lock, color: Color(0xFF38A3A5)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // --- GİRİŞ YAP BUTONU ---
+                    ElevatedButton(
+                      onPressed: _girisYap,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF38A3A5),
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 50),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12.0),
+                        ),
+                        elevation: 2,
+                      ),
+                      child: const Text(
+                        'Giriş Yap',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
 
-            const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-            // --- GİRİŞ YAP BUTONU ---
-            ElevatedButton(
-              onPressed: _girisYap,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.turkuaz,
-                foregroundColor: AppColors.beyaz,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10.0),
+              // --- YENİ HESAP OLUŞTUR BUTONU ---
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const KayitSayfasi()),
+                  );
+                },
+                child: const Text(
+                  'Hesabın yok mu? Yeni Hesap Oluştur',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 ),
-                elevation: 2,
               ),
-              child: const Text(
-                'Giriş Yap',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
 
-            const SizedBox(height: 10),
-
-            // --- YENİ HESAP OLUŞTUR BUTONU ---
-            TextButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const KayitSayfasi()),
-                );
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.softPembeKoyu, // Soft pembe rengi kullanıldı
+              // --- ŞİFREMİ UNUTTUM BUTONU ---
+              TextButton(
+                onPressed: _sifremiUnuttum,
+                child: const Text(
+                  'Şifremi Unuttum',
+                  style: TextStyle(color: Colors.white70),
+                ),
               ),
-              child: const Text('Hesabın yok mu? Yeni Hesap Oluştur'),
-            ),
-
-            // --- ŞİFREMİ UNUTTUM BUTONU ---
-            TextButton(
-              onPressed: _sifremiUnuttum,
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.grey[600],
-              ),
-              child: const Text('Şifremi Unuttum'),
-            ),
-          ],
+              const SizedBox(height: 50),
+            ],
+          ),
         ),
       ),
     );
